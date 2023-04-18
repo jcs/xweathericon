@@ -1,0 +1,38 @@
+.Dd $Mdocdate$
+.Dt XWEATHERICON 1
+.Os
+.Sh NAME
+.Nm xweathericon
+.Nd show current weather conditions as an iconified X11 window
+.Sh SYNOPSIS
+.Nm
+.Op Fl c
+.Op Fl d Ar display
+.Op Fl i Ar interval
+.Op Fl k Ar api_key
+.Op Fl z Ar zipcode
+.Sh DESCRIPTION
+.Nm
+periodically fetches the weather from the OpenWeatherMap API and shows the
+current weather conditions as an icon and the temperature as the icon's title.
+Un-iconifying the program shows the same icon in a small window.
+.Sh OPTIONS
+.Bl -tag -width Ds
+.It Fl c
+Show temperature in Celsius instead of Fahrenheit.
+.It Fl d Ar display
+Use a different X11 display named
+.Ar display .
+.It Fl i Ar interval
+Update every
+.Ar interval
+seconds instead of the default of 1800 seconds (30 minutes).
+.It Fl k Ar api_key
+The API key supplied to the OpenWeatherMap API (required).
+.It Fl z Ar zipcode
+The Zipcode supplied to the OpenWeatherMap API (required).
+.El
+.Sh AUTHORS
+.Nm
+was written by
+.An joshua stein Aq Mt jcs@jcs.org .
