@@ -10,6 +10,8 @@ It was written to work with
 but should work with any X11 window manager that handles `IconicState`
 hints and shows icons in a useful manner.
 
+![screenshot](https://user-images.githubusercontent.com/9888/233207549-07b5d447-7b76-4aee-a40a-7bdf1bc80dd3.png)
+
 ## License
 
 ISC
