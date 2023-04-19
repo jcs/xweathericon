@@ -16,7 +16,7 @@ ISC
 
 ## Dependencies
 
-`libX11` and `libXpm`
+`libX11` and `libXpm`, optionally `libtls` from LibreSSL
 
 ## Compiling
 

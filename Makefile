@@ -25,6 +25,10 @@ CFLAGS+=	-O2 -Wall -Wunused -Wshadow \
 		`pkg-config --cflags ${PKGLIBS}`
 LDFLAGS+=	`pkg-config --libs ${PKGLIBS}`
 
+# link with LibreSSL's TLS library for HTTPS API support
+CFLAGS+=	-DTLS=1
+LDFLAGS+=	-ltls
+
 # uncomment for debugging
 #CFLAGS+=	-DDEBUG=1
 

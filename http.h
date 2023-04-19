@@ -24,6 +24,10 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 
+#if TLS
+#include <tls.h>
+#endif
+
 #include "util.h"
 
 struct url {
@@ -37,6 +41,10 @@ struct http_request {
 	struct url *url;
 
 	int socket;
+	int https;
+#if TLS
+	struct tls *tls;
+#endif
 
 	char *message;
 	int status;

@@ -27,6 +27,10 @@
 #include <sys/fcntl.h>
 #include <sys/types.h>
 
+#if TLS
+#include <tls.h>
+#endif
+
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/xpm.h>
@@ -310,8 +314,13 @@ fetch_weather(void)
 		if (url == NULL)
 			err(1, "malloc");
 
-		snprintf(url, 256, "http://api.openweathermap.org/data/2.5/"
+		snprintf(url, 256, "%s://api.openweathermap.org/data/2.5/"
 		    "weather?zip=%s&appid=%s&units=%s&mode=json",
+#if TLS
+		    "https",
+#else
+		    "http",
+#endif
 		    zipcode, api_key, fahrenheit ? "imperial" : "metric");
 	}
 

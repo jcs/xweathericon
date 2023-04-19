@@ -146,6 +146,10 @@ http_get(const char *surl)
 	struct sockaddr_in addr;
 	size_t len, tlen;
 	char ip_s[16];
+#if TLS
+	struct tls_config *tls_config;
+	int tret;
+#endif
 
 	url = url_parse(surl);
 	if (url == NULL)
@@ -156,6 +160,14 @@ http_get(const char *surl)
 		err(1, "malloc");
 	memset(req, 0, sizeof(struct http_request));
 	req->url = url;
+
+	if (strcmp(url->scheme, "https") == 0) {
+#if TLS
+		req->https = 1;
+#else
+		errx(1, "requested HTTPS URL but no TLS support: %s", surl);
+#endif
+	}
 
 	he = gethostbyname(req->url->host);
 	if (he == NULL) {
@@ -175,12 +187,54 @@ http_get(const char *surl)
 
 	inet_ntop(AF_INET, &addr.sin_addr, ip_s, sizeof(ip_s));
 
+#if DEBUG
+	printf("connecting to %s (%s) %sto fetch %s\n",
+	    req->url->host, ip_s, req->https ? "(with TLS) " : "",
+	    req->url->path);
+#endif
+
 	if (connect(req->socket, (struct sockaddr *)&addr,
 	    sizeof(addr)) == -1) {
 		warn("failed connecting to %s (%s) port %d",
 		  req->url->host, ip_s, req->url->port);
 		goto error;
 	}
+
+#if TLS
+	if (req->https) {
+		tls_config = tls_config_new();
+		if (tls_config == NULL)
+			errx(1, "tls_config allocation failed");
+		if (tls_config_set_protocols(tls_config,
+		    TLS_PROTOCOLS_ALL) != 0)
+			errx(1, "tls set protocols failed: %s",
+			    tls_config_error(tls_config));
+		if (tls_config_set_ciphers(tls_config, "legacy") != 0)
+			errx(1, "tls set ciphers failed: %s",
+			    tls_config_error(tls_config));
+
+		req->tls = tls_client();
+		if (req->tls == NULL)
+			errx(1, "tls_client allocation failed");
+
+		if (tls_configure(req->tls, tls_config) != 0)
+			errx(1, "tls_configure failed: %s",
+			    tls_config_error(tls_config));
+
+		if (tls_connect_socket(req->tls, req->socket,
+		    req->url->host) != 0)
+			errx(1, "TLS connect to %s failed: %s", req->url->host,
+			    tls_error(req->tls));
+
+		do {
+			tret = tls_handshake(req->tls);
+		} while (tret == TLS_WANT_POLLIN || tret == TLS_WANT_POLLOUT);
+
+		if (tret != 0)
+			errx(1, "TLS handshake to %s failed: %s",
+			    req->url->host, tls_error(req->tls));
+	}
+#endif
 
 	tlen = 256 + strlen(req->url->host) + strlen(req->url->path);
 	req->message = malloc(tlen);
@@ -200,7 +254,17 @@ http_get(const char *surl)
 #if DEBUG
 	printf(">>>[%zu] %s\n", len, req->message);
 #endif
-	tlen = write(req->socket, req->message, len);
+
+#if TLS
+	if (req->https) {
+		do {
+			tlen = tls_write(req->tls, req->message, len);
+		} while (tlen == TLS_WANT_POLLIN || tlen == TLS_WANT_POLLOUT);
+	} else
+#endif
+	{
+		tlen = write(req->socket, req->message, len);
+	}
 	if (tlen != len)
 		err(1, "short write");
 
@@ -233,12 +297,29 @@ http_req_read(struct http_request *req, char *data, size_t len)
 		return 0;
 	}
 
-	ret = read(req->socket, data, len);
+#if TLS
+	if (req->https) {
+		do {
+			ret = tls_read(req->tls, data, len);
+		} while (ret == TLS_WANT_POLLIN || ret == TLS_WANT_POLLOUT);
+	} else
+#endif
+	{
+		ret = read(req->socket, data, len);
+	}
 #if DEBUG
 	printf("<<<[%zu] %s\n", len, data);
 #endif
 
 	if (ret == -1) {
+#if TLS
+		if (req->https) {
+			tls_close(req->tls);
+			tls_free(req->tls);
+			req->tls = NULL;
+			req->https = 0;
+		}
+#endif
 		close(req->socket);
 		req->socket = 0;
 		return -1;
@@ -352,6 +433,13 @@ http_req_free(struct http_request *req)
 	if (req == NULL)
 		return;
 
+#if TLS
+	if (req->https && req->tls) {
+		tls_close(req->tls);
+		tls_free(req->tls);
+		req->tls = NULL;
+	}
+#endif
 	if (req->socket)
 		close(req->socket);
 	if (req->message != NULL)
