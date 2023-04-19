@@ -39,6 +39,7 @@
 #include "pdjson.h"
 
 #include "icons/clouds.xpm"
+#include "icons/moon.xpm"
 #include "icons/rain.xpm"
 #include "icons/snow.xpm"
 #include "icons/sun.xpm"
@@ -54,6 +55,7 @@ struct {
 enum icon_type {
 	ICON_SUN,
 	ICON_CLOUDS,
+	ICON_MOON,
 	ICON_RAIN,
 	ICON_SNOW,
 };
@@ -67,6 +69,7 @@ struct icon_map_entry {
 } icon_map[] = {
 	{ sun_xpm, ICON_SUN },
 	{ clouds_xpm, ICON_CLOUDS },
+	{ moon_xpm, ICON_MOON },
 	{ rain_xpm, ICON_RAIN },
 	{ snow_xpm, ICON_SNOW },
 };
@@ -297,12 +300,13 @@ fetch_weather(void)
 	json_stream js;
 	enum json_type jt;
 	const char *str;
-	int weather_id;
+	int weather_id, night;
 	enum {
 		STATE_BEGIN,
 		STATE_IN_WEATHER,
 		STATE_IN_WEATHER_ID,
 		STATE_IN_WEATHER_DESC,
+		STATE_IN_WEATHER_ICON,
 		STATE_IN_MAIN,
 		STATE_IN_MAIN_TEMP,
 	} state = STATE_BEGIN;
@@ -338,6 +342,7 @@ fetch_weather(void)
 	    "(Failed to parse API response)");
 	current_temp = 0;
 	weather_id = 0;
+	night = 0;
 
 	/* https://openweathermap.org/current#parameter */
 	json_open_user(&js, fetch_weather_read, fetch_weather_peek, req);
@@ -363,12 +368,20 @@ fetch_weather(void)
 				state = STATE_IN_WEATHER_DESC;
 			else if (jt == JSON_STRING && strcmp(str, "id") == 0)
 				state = STATE_IN_WEATHER_ID;
+			else if (jt == JSON_STRING && strcmp(str, "icon") == 0)
+				state = STATE_IN_WEATHER_ICON;
 			else if (jt == JSON_OBJECT_END)
 				state = STATE_BEGIN;
 			break;
 		case STATE_IN_WEATHER_ID:
 			if (jt == JSON_NUMBER)
 				weather_id = json_get_number(&js);
+			state = STATE_IN_WEATHER;
+			break;
+		case STATE_IN_WEATHER_ICON:
+			if (jt == JSON_STRING)
+				/* "13d" or "04n" */
+				night = (str[2] == 'n');
 			state = STATE_IN_WEATHER;
 			break;
 		case STATE_IN_WEATHER_DESC:
@@ -410,8 +423,12 @@ fetch_weather(void)
 		current_condition_icon = ICON_SNOW;
 	else if (weather_id >= 801 && weather_id <= 804)
 		current_condition_icon = ICON_CLOUDS;
-	else
-		current_condition_icon = ICON_SUN;
+	else {
+		if (night)
+			current_condition_icon = ICON_MOON;
+		else
+			current_condition_icon = ICON_SUN;
+	}
 
 	redraw_icon();
 
