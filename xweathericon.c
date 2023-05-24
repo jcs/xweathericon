@@ -411,7 +411,7 @@ fetch_weather(void)
 
 	snprintf(current_conditions + strlen(current_conditions),
 	    sizeof(current_conditions) - strlen(current_conditions),
-	    ", %d%c%c", (int)current_temp, 0xb0, /* degrees symbol */
+	    "\n%d%c%c", (int)current_temp, 0xb0, /* degrees symbol */
 	    fahrenheit ? 'F' : 'C');
 
 	/* https://openweathermap.org/weather-conditions */
