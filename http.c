@@ -222,17 +222,21 @@ http_get(const char *surl)
 			    tls_config_error(tls_config));
 
 		if (tls_connect_socket(req->tls, req->socket,
-		    req->url->host) != 0)
-			errx(1, "TLS connect to %s failed: %s", req->url->host,
+		    req->url->host) != 0) {
+			warnx("TLS connect to %s failed: %s", req->url->host,
 			    tls_error(req->tls));
+			goto error;
+		}
 
 		do {
 			tret = tls_handshake(req->tls);
 		} while (tret == TLS_WANT_POLLIN || tret == TLS_WANT_POLLOUT);
 
-		if (tret != 0)
-			errx(1, "TLS handshake to %s failed: %s",
+		if (tret != 0) {
+			warnx("TLS handshake to %s failed: %s",
 			    req->url->host, tls_error(req->tls));
+			goto error;
+		}
 	}
 #endif
 
