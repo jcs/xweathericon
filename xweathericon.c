@@ -421,6 +421,8 @@ fetch_weather(void)
 		current_condition_icon = ICON_RAIN;
 	else if (weather_id >= 600 && weather_id <= 699)
 		current_condition_icon = ICON_SNOW;
+	else if (weather_id == 701) /* mist */
+		current_condition_icon = ICON_RAIN;
 	else if (weather_id >= 801 && weather_id <= 804)
 		current_condition_icon = ICON_CLOUDS;
 	else {
