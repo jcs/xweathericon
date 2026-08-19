@@ -90,9 +90,10 @@ struct timespec last_weather_check;
 char	*api_key = NULL;
 char	*zipcode = NULL;
 int	fahrenheit = 1;
+int	humidity = 0;
 
 char	current_conditions[100];
-double	current_temp;
+double	current_temp, current_humidity;
 enum icon_type current_condition_icon;
 
 #define WINDOW_WIDTH		200
@@ -111,13 +112,16 @@ main(int argc, char* argv[])
 	long sleep_secs;
 	int ch, i;
 
-	while ((ch = getopt(argc, argv, "cd:i:k:z:")) != -1) {
+	while ((ch = getopt(argc, argv, "cd:hi:k:z:")) != -1) {
 		switch (ch) {
 		case 'c':
 			fahrenheit = 0;
 			break;
 		case 'd':
 			display = optarg;
+			break;
+		case 'h':
+			humidity = 1;
 			break;
 		case 'i':
 			weather_check_secs = atoi(optarg);
@@ -272,7 +276,7 @@ void
 usage(void)
 {
 	fprintf(stderr, "usage: %s %s\n", __progname,
-		"-k api_key -z zipcode [-c] [-d display] [-i interval]");
+		"-k api_key -z zipcode [-ch] [-d display] [-i interval]");
 	exit(1);
 }
 
@@ -297,6 +301,7 @@ fetch_weather(void)
 {
 	static char *url = NULL;
 	struct http_request *req;
+	size_t len;
 	json_stream js;
 	enum json_type jt;
 	const char *str;
@@ -309,6 +314,7 @@ fetch_weather(void)
 		STATE_IN_WEATHER_ICON,
 		STATE_IN_MAIN,
 		STATE_IN_MAIN_TEMP,
+		STATE_IN_MAIN_HUMIDITY,
 	} state = STATE_BEGIN;
 
 	clock_gettime(CLOCK_MONOTONIC, &last_weather_check);
@@ -338,9 +344,10 @@ fetch_weather(void)
 		return 1;
 	}
 
-	snprintf(current_conditions, sizeof(current_conditions),
+	len = snprintf(current_conditions, sizeof(current_conditions),
 	    "(Failed to parse API response)");
 	current_temp = 0;
+	current_humidity = 0;
 	weather_id = 0;
 	night = 0;
 
@@ -385,7 +392,7 @@ fetch_weather(void)
 			state = STATE_IN_WEATHER;
 			break;
 		case STATE_IN_WEATHER_DESC:
-			strlcpy(current_conditions, str,
+			len = strlcpy(current_conditions, str,
 			    sizeof(current_conditions));
 			current_conditions[0] = toupper(current_conditions[0]);
 			state = STATE_IN_WEATHER;
@@ -393,10 +400,18 @@ fetch_weather(void)
 		case STATE_IN_MAIN:
 			if (jt == JSON_STRING && strcmp(str, "temp") == 0)
 				state = STATE_IN_MAIN_TEMP;
+			else if (jt == JSON_STRING && strcmp(str,
+			    "humidity") == 0)
+				state = STATE_IN_MAIN_HUMIDITY;
 			break;
 		case STATE_IN_MAIN_TEMP:
 			if (jt == JSON_NUMBER)
 				current_temp = json_get_number(&js);
+			state = STATE_IN_MAIN;
+			break;
+		case STATE_IN_MAIN_HUMIDITY:
+			if (jt == JSON_NUMBER)
+				current_humidity = json_get_number(&js);
 			state = STATE_IN_MAIN;
 			break;
 		}
@@ -405,14 +420,25 @@ fetch_weather(void)
 	http_req_free(req);
 
 #if DEBUG
-	printf("current conditions: %s\ntemperature: %d\nweather_id: %d\n",
-	    current_conditions, (int)current_temp, weather_id);
+	printf("current conditions: %s\n"
+	    "temperature: %d\n"
+	    "humidity : %d\n"
+	    "weather_id: %d\n",
+	    current_conditions, (int)current_temp, (int)current_humidity,
+	    weather_id);
 #endif
 
-	snprintf(current_conditions + strlen(current_conditions),
-	    sizeof(current_conditions) - strlen(current_conditions),
-	    "\n%d%c%c", (int)current_temp, 0xb0, /* degrees symbol */
-	    fahrenheit ? 'F' : 'C');
+	if (len < sizeof(current_conditions)) {
+		len += snprintf(current_conditions + len,
+		    sizeof(current_conditions) - len,
+		    "\n%d%c%c", (int)current_temp, 0xb0, /* degrees symbol */
+		    fahrenheit ? 'F' : 'C');
+
+		if (humidity && len < sizeof(current_conditions))
+			snprintf(current_conditions + len,
+			    sizeof(current_conditions) - len,
+			    " / %d%%", (int)current_humidity);
+	}
 
 	/* https://openweathermap.org/weather-conditions */
 	if (weather_id >= 200 && weather_id <= 399)
